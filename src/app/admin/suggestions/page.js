@@ -84,7 +84,7 @@ export default function AdminSuggestionsPage() {
 
                 {s.status === 'pending' && (
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <Link href={`/admin/gyms/new?from_suggestion=${s.id}&name=${encodeURIComponent(s.name)}&suburb=${encodeURIComponent(s.suburb || '')}&lat=${s.latitude || ''}&lng=${s.longitude || ''}`} style={{
+                    <Link href={`/admin/gyms/new?from_suggestion=${s.id}&name=${encodeURIComponent(s.name)}&suburb=${encodeURIComponent(s.suburb || '')}&municipality=${encodeURIComponent(s.municipality || '')}&notes=${encodeURIComponent(s.notes || '')}&lat=${s.latitude || ''}&lng=${s.longitude || ''}`} style={{
                       flex: 2, padding: '8px', background: '#2D6A4F', color: 'white',
                       borderRadius: '8px', fontSize: '13px', fontWeight: 600, textDecoration: 'none', textAlign: 'center'
                     }}>+ Add as gym</Link>

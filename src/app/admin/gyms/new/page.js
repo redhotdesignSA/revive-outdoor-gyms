@@ -44,7 +44,7 @@ function AddGymForm() {
     municipality: searchParams.get('municipality') || '',
     province: '',
     overall_status: 'unknown',
-    public_notes: '',
+    public_notes: searchParams.get('notes') || '',
     latitude: searchParams.get('lat') ? parseFloat(searchParams.get('lat')) : null,
     longitude: searchParams.get('lng') ? parseFloat(searchParams.get('lng')) : null,
   })
