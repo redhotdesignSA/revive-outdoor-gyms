@@ -19,7 +19,6 @@ export default function SuggestGymPage() {
     name: '',
     suburb: '',
     municipality: 'Nelson Mandela Bay',
-    province: 'Eastern Cape',
     notes: '',
     submitter_name: '',
     submitter_email: '',
@@ -145,18 +144,17 @@ export default function SuggestGymPage() {
     try {
       const supabase = createClient()
       const { error } = await supabase.from('gym_suggestions').insert({
-        name: form.name,
-        suburb: form.suburb,
-        municipality: form.municipality || null,
-        province: form.province || null,
-        notes: form.notes || null,
-        submitter_name: form.submitter_name || null,
-        submitter_email: form.submitter_email || null,
-        submitter_phone: form.submitter_phone || null,
-        latitude: form.latitude,
-        longitude: form.longitude,
-        status: 'pending',
-      })
+  name: form.name,
+  suburb: form.suburb,
+  municipality: form.municipality || null,
+  notes: form.notes || null,
+  submitter_name: form.submitter_name || null,
+  submitter_email: form.submitter_email || null,
+  submitter_phone: form.submitter_phone || null,
+  latitude: form.latitude,
+  longitude: form.longitude,
+  status: 'pending',
+})
       if (error) throw error
       setSubmitted(true)
     } catch (err) {
@@ -261,24 +259,7 @@ export default function SuggestGymPage() {
               />
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Province</label>
-              <select
-                value={form.province}
-                onChange={e => update('province', e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px', background: 'white' }}
-              >
-                <option value="Eastern Cape">Eastern Cape</option>
-                <option value="Western Cape">Western Cape</option>
-                <option value="Gauteng">Gauteng</option>
-                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
-                <option value="Limpopo">Limpopo</option>
-                <option value="Mpumalanga">Mpumalanga</option>
-                <option value="North West">North West</option>
-                <option value="Northern Cape">Northern Cape</option>
-                <option value="Free State">Free State</option>
-              </select>
-            </div>
+          
 
             {/* GPS pin requirement notice */}
             <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '10px', padding: '12px 14px' }}>
