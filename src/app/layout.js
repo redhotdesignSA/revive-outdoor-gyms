@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Revive Our Outdoor Gyms',
+  title: 'Gymwatch',
   description: 'Track and report the condition of outdoor gym equipment across South Africa',
 }
 
@@ -30,7 +30,7 @@ export default function RootLayout({ children }) {
         }}>
           <a href="/" style={{ color: 'white', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '20px' }}>🏋️</span>
-            <span style={{ fontWeight: 700, fontSize: '16px' }}>Revive Our Gyms</span>
+            <span style={{ fontWeight: 700, fontSize: '16px' }}>Gymwatch</span>
           </a>
           <a href="/report" style={{
             background: '#E76F51',
@@ -40,7 +40,7 @@ export default function RootLayout({ children }) {
             textDecoration: 'none',
             fontSize: '13px',
             fontWeight: 600
-          }}>Report Issue</a>
+          }}>Report broken equipment</a>
         </header>
         <main style={{ minHeight: 'calc(100vh - 56px)' }}>
           {children}
