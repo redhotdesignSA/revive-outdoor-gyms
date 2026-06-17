@@ -103,7 +103,6 @@ function ReportForm() {
       const { error } = await supabase.from('reports').insert({
         gym_site_id: form.gym_id,
         equipment_unit_id: form.equipment_unit_id || null,
-        machine_label: form.machine_label,
         issue_type: form.issue_type,
         severity: form.severity,
         notes: form.notes,
