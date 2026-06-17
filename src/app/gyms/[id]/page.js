@@ -2,62 +2,8 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-
-const MOCK_GYMS = {
-  '1': {
-    id: '1',
-    name: 'Summerstrand Beachfront Gym',
-    suburb: 'Summerstrand',
-    municipality: 'Nelson Mandela Bay',
-    province: 'Eastern Cape',
-    overall_status: 'needs_maintenance',
-    public_notes: 'Popular beachfront gym used daily by residents. Several machines have been damaged.',
-    machines: [
-      { id: 'm1', machine_label: 'Double Stepper', condition_status: 'worn', usability_status: 'partly_usable', safety_flag: false },
-      { id: 'm2', machine_label: 'Air Walker', condition_status: 'unsafe', usability_status: 'unusable', safety_flag: true },
-      { id: 'm3', machine_label: 'Chest Press', condition_status: 'broken', usability_status: 'unusable', safety_flag: false },
-      { id: 'm4', machine_label: 'Waist Twister', condition_status: 'good', usability_status: 'usable', safety_flag: false },
-    ],
-    timeline: [
-      { date: '2025-06-01', event_type: 'report', title: 'Air walker reported unsafe', description: 'Bolt missing from pivot point.' },
-      { date: '2025-05-15', event_type: 'report', title: 'Chest press reported broken', description: 'Resistance mechanism completely failed.' },
-    ],
-  },
-  '2': {
-    id: '2',
-    name: 'Greenacres Park Gym',
-    suburb: 'Greenacres',
-    municipality: 'Nelson Mandela Bay',
-    province: 'Eastern Cape',
-    overall_status: 'good',
-    public_notes: 'Well maintained gym in the park. All equipment in working order.',
-    machines: [
-      { id: 'm5', machine_label: 'Leg Press', condition_status: 'good', usability_status: 'usable', safety_flag: false },
-      { id: 'm6', machine_label: 'Pull Up Bars', condition_status: 'good', usability_status: 'usable', safety_flag: false },
-      { id: 'm7', machine_label: 'Back Extension', condition_status: 'good', usability_status: 'usable', safety_flag: false },
-    ],
-    timeline: [],
-  },
-  '3': {
-    id: '3',
-    name: 'Walmer Township Gym',
-    suburb: 'Walmer',
-    municipality: 'Nelson Mandela Bay',
-    province: 'Eastern Cape',
-    overall_status: 'critical',
-    public_notes: 'Gym in urgent need of attention. Most equipment is unusable or unsafe.',
-    machines: [
-      { id: 'm8', machine_label: 'Stepper', condition_status: 'broken', usability_status: 'unusable', safety_flag: true },
-      { id: 'm9', machine_label: 'Shoulder Press', condition_status: 'broken', usability_status: 'unusable', safety_flag: false },
-      { id: 'm10', machine_label: 'Sit Up Bench', condition_status: 'unsafe', usability_status: 'unusable', safety_flag: true },
-      { id: 'm11', machine_label: 'Twister', condition_status: 'worn', usability_status: 'partly_usable', safety_flag: false },
-      { id: 'm12', machine_label: 'Leg Raise', condition_status: 'good', usability_status: 'usable', safety_flag: false },
-    ],
-    timeline: [
-      { date: '2025-06-10', event_type: 'report', title: 'Multiple machines reported broken', description: 'Community member reported 3 machines out of order.' },
-    ],
-  },
-}
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const STATUS_COLOURS = {
   good: '#2D6A4F',
@@ -83,7 +29,55 @@ const CONDITION_STYLES = {
 
 export default function GymDetailPage() {
   const params = useParams()
-  const gym = MOCK_GYMS[params.id]
+  const [gym, setGym] = useState(null)
+  const [machines, setMachines] = useState([])
+  const [timeline, setTimeline] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchGym = async () => {
+      const supabase = createClient()
+
+      const { data: gymData, error: gymError } = await supabase
+        .from('gym_sites')
+        .select('*')
+        .eq('id', params.id)
+        .single()
+
+      if (gymError) {
+        console.error('Error fetching gym:', gymError)
+        setLoading(false)
+        return
+      }
+
+      const { data: machineData } = await supabase
+        .from('equipment_units')
+        .select('*')
+        .eq('gym_site_id', params.id)
+        .order('machine_label')
+
+      const { data: timelineData } = await supabase
+        .from('timeline_events')
+        .select('*')
+        .eq('gym_site_id', params.id)
+        .order('created_at', { ascending: false })
+
+      setGym(gymData)
+      setMachines(machineData || [])
+      setTimeline(timelineData || [])
+      setLoading(false)
+    }
+
+    fetchGym()
+  }, [params.id])
+
+  if (loading) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: '#6B7280' }}>
+        Loading gym details...
+      </div>
+    )
+  }
 
   if (!gym) {
     return (
@@ -95,19 +89,19 @@ export default function GymDetailPage() {
   }
 
   const statusColour = STATUS_COLOURS[gym.overall_status] || '#9CA3AF'
-  const brokenCount = gym.machines.filter(m => m.condition_status === 'broken' || m.condition_status === 'unsafe').length
+  const brokenCount = machines.filter(m =>
+    m.condition_status === 'broken' || m.condition_status === 'unsafe'
+  ).length
 
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto', padding: '0 0 3rem' }}>
 
-      {/* Back nav */}
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB', background: 'white' }}>
         <Link href="/map" style={{ color: '#2D6A4F', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
           ← Back to map
         </Link>
       </div>
 
-      {/* Gym header */}
       <div style={{ padding: '20px 16px', background: 'white', borderBottom: '1px solid #E5E7EB' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div>
@@ -124,7 +118,7 @@ export default function GymDetailPage() {
             flexShrink: 0,
             marginTop: '4px'
           }}>
-            {STATUS_LABELS[gym.overall_status]}
+            {STATUS_LABELS[gym.overall_status] || 'Unknown'}
           </span>
         </div>
 
@@ -134,10 +128,9 @@ export default function GymDetailPage() {
           </p>
         )}
 
-        {/* Quick stats */}
         <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
           <div style={{ flex: 1, background: '#F9FAFB', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#2D6A4F' }}>{gym.machines.length}</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#2D6A4F' }}>{machines.length}</div>
             <div style={{ fontSize: '11px', color: '#6B7280' }}>Total machines</div>
           </div>
           <div style={{ flex: 1, background: '#F9FAFB', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
@@ -145,13 +138,12 @@ export default function GymDetailPage() {
             <div style={{ fontSize: '11px', color: '#6B7280' }}>Need attention</div>
           </div>
           <div style={{ flex: 1, background: '#F9FAFB', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#374151' }}>{gym.timeline.length}</div>
-            <div style={{ fontSize: '11px', color: '#6B7280' }}>Reports filed</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#374151' }}>{timeline.length}</div>
+            <div style={{ fontSize: '11px', color: '#6B7280' }}>Timeline events</div>
           </div>
         </div>
       </div>
 
-      {/* Report CTA */}
       <div style={{ padding: '12px 16px', background: '#FFF7ED', borderBottom: '1px solid #FED7AA' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '14px', color: '#92400E' }}>See something broken?</span>
@@ -167,61 +159,63 @@ export default function GymDetailPage() {
         </div>
       </div>
 
-      {/* Machines */}
-      <div style={{ padding: '16px' }}>
-        <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>Equipment</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {gym.machines.map((machine) => {
-            const cond = CONDITION_STYLES[machine.condition_status] || CONDITION_STYLES.unknown
-            return (
-              <div key={machine.id} style={{
-                background: 'white',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                border: machine.safety_flag ? '1px solid #FCA5A5' : '1px solid transparent'
-              }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px' }}>
-                    {machine.safety_flag && <span style={{ color: '#E76F51', marginRight: '6px' }}>⚠️</span>}
-                    {machine.machine_label}
+      {machines.length > 0 && (
+        <div style={{ padding: '16px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>Equipment</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {machines.map((machine) => {
+              const cond = CONDITION_STYLES[machine.condition_status] || CONDITION_STYLES.unknown
+              return (
+                <div key={machine.id} style={{
+                  background: 'white',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  border: machine.safety_flag ? '1px solid #FCA5A5' : '1px solid transparent'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '14px' }}>
+                      {machine.safety_flag && <span style={{ color: '#E76F51', marginRight: '6px' }}>⚠️</span>}
+                      {machine.machine_label}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
+                      {machine.usability_status === 'usable' ? 'In use' :
+                       machine.usability_status === 'partly_usable' ? 'Partly usable' : 'Out of order'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
-                    {machine.usability_status === 'usable' ? 'In use' :
-                     machine.usability_status === 'partly_usable' ? 'Partly usable' : 'Out of order'}
-                  </div>
+                  <span style={{
+                    background: cond.bg,
+                    color: cond.color,
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 600
+                  }}>{cond.label}</span>
                 </div>
-                <span style={{
-                  background: cond.bg,
-                  color: cond.color,
-                  padding: '3px 10px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  fontWeight: 600
-                }}>{cond.label}</span>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Timeline */}
-      {gym.timeline.length > 0 && (
+      {timeline.length > 0 && (
         <div style={{ padding: '0 16px 16px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>History</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {gym.timeline.map((event, i) => (
-              <div key={i} style={{
+            {timeline.map((event) => (
+              <div key={event.id} style={{
                 background: 'white',
                 borderRadius: '10px',
                 padding: '14px 16px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 borderLeft: '3px solid #E76F51'
               }}>
-                <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '4px' }}>{event.date}</div>
+                <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '4px' }}>
+                  {new Date(event.created_at).toLocaleDateString('en-ZA')}
+                </div>
                 <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>{event.title}</div>
                 <div style={{ fontSize: '13px', color: '#6B7280' }}>{event.description}</div>
               </div>

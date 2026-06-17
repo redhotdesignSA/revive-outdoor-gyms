@@ -1,43 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-
-const MOCK_GYMS = [
-  {
-    id: '1',
-    name: 'Summerstrand Beachfront Gym',
-    suburb: 'Summerstrand',
-    municipality: 'Nelson Mandela Bay',
-    latitude: -33.9735,
-    longitude: 25.6510,
-    overall_status: 'needs_maintenance',
-    machine_count: 4,
-    broken_count: 2,
-  },
-  {
-    id: '2',
-    name: 'Greenacres Park Gym',
-    suburb: 'Greenacres',
-    municipality: 'Nelson Mandela Bay',
-    latitude: -33.9580,
-    longitude: 25.5720,
-    overall_status: 'good',
-    machine_count: 6,
-    broken_count: 0,
-  },
-  {
-    id: '3',
-    name: 'Walmer Township Gym',
-    suburb: 'Walmer',
-    municipality: 'Nelson Mandela Bay',
-    latitude: -33.9820,
-    longitude: 25.5490,
-    overall_status: 'critical',
-    machine_count: 5,
-    broken_count: 4,
-  },
-]
+import { createClient } from '@/lib/supabase/client'
 
 const STATUS_COLOURS = {
   good: '#2D6A4F',
@@ -56,8 +21,30 @@ const STATUS_LABELS = {
 export default function MapPage() {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
+  const [gyms, setGyms] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const fetchGyms = async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('gym_sites')
+        .select('*')
+        .order('name')
+
+      if (error) {
+        console.error('Error fetching gyms:', error)
+      } else {
+        setGyms(data || [])
+      }
+      setLoading(false)
+    }
+
+    fetchGyms()
+  }, [])
+
+  useEffect(() => {
+    if (loading) return
     if (typeof window === 'undefined') return
     if (mapInstanceRef.current) return
 
@@ -69,14 +56,19 @@ export default function MapPage() {
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       })
 
-      const map = L.map(mapRef.current).setView([-33.9600, 25.6000], 12)
+      const defaultCenter = gyms.length > 0
+        ? [gyms[0].latitude, gyms[0].longitude]
+        : [-33.9600, 25.6000]
+
+      const map = L.map(mapRef.current).setView(defaultCenter, 12)
       mapInstanceRef.current = map
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
       }).addTo(map)
 
-      MOCK_GYMS.forEach((gym) => {
+      gyms.forEach((gym) => {
+        if (!gym.latitude || !gym.longitude) return
         const colour = STATUS_COLOURS[gym.overall_status] || '#9CA3AF'
 
         const icon = L.divIcon({
@@ -97,14 +89,11 @@ export default function MapPage() {
         marker.bindPopup(`
           <div style="min-width:180px;font-family:sans-serif">
             <strong style="font-size:14px">${gym.name}</strong>
-            <div style="color:#6B7280;font-size:12px;margin:4px 0">${gym.suburb}</div>
+            <div style="color:#6B7280;font-size:12px;margin:4px 0">${gym.suburb || ''}</div>
             <div style="margin:8px 0">
               <span style="background:${colour};color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">
-                ${STATUS_LABELS[gym.overall_status]}
+                ${STATUS_LABELS[gym.overall_status] || 'Unknown'}
               </span>
-            </div>
-            <div style="font-size:12px;color:#374151;margin-bottom:10px">
-              ${gym.broken_count} of ${gym.machine_count} machines need attention
             </div>
             <a href="/gyms/${gym.id}" style="
               display:block;text-align:center;
@@ -123,7 +112,7 @@ export default function MapPage() {
         mapInstanceRef.current = null
       }
     }
-  }, [])
+  }, [loading, gyms])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
@@ -154,7 +143,13 @@ export default function MapPage() {
         </span>
       </div>
 
-      <div ref={mapRef} style={{ flex: 1, width: '100%' }} />
+      {loading ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}>
+          Loading map...
+        </div>
+      ) : (
+        <div ref={mapRef} style={{ flex: 1, width: '100%' }} />
+      )}
 
       <div style={{
         background: 'white',
@@ -162,30 +157,36 @@ export default function MapPage() {
         maxHeight: '220px',
         overflowY: 'auto'
       }}>
-        {MOCK_GYMS.map((gym) => (
-          <Link key={gym.id} href={`/gyms/${gym.id}`} style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '12px 16px',
-            borderBottom: '1px solid #F3F4F6',
-            textDecoration: 'none',
-            color: 'inherit'
-          }}>
-            <span style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              background: STATUS_COLOURS[gym.overall_status],
-              flexShrink: 0,
-              marginRight: '12px'
-            }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: '14px' }}>{gym.name}</div>
-              <div style={{ fontSize: '12px', color: '#6B7280' }}>{gym.suburb} · {gym.broken_count} issues</div>
-            </div>
-            <span style={{ color: '#9CA3AF', fontSize: '18px' }}>›</span>
-          </Link>
-        ))}
+        {loading ? (
+          <div style={{ padding: '16px', color: '#6B7280', textAlign: 'center' }}>Loading gyms...</div>
+        ) : gyms.length === 0 ? (
+          <div style={{ padding: '16px', color: '#6B7280', textAlign: 'center' }}>No gyms added yet.</div>
+        ) : (
+          gyms.map((gym) => (
+            <Link key={gym.id} href={`/gyms/${gym.id}`} style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '12px 16px',
+              borderBottom: '1px solid #F3F4F6',
+              textDecoration: 'none',
+              color: 'inherit'
+            }}>
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: STATUS_COLOURS[gym.overall_status] || '#9CA3AF',
+                flexShrink: 0,
+                marginRight: '12px'
+              }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: '14px' }}>{gym.name}</div>
+                <div style={{ fontSize: '12px', color: '#6B7280' }}>{gym.suburb} · {gym.municipality}</div>
+              </div>
+              <span style={{ color: '#9CA3AF', fontSize: '18px' }}>›</span>
+            </Link>
+          ))
+        )}
       </div>
     </div>
   )
