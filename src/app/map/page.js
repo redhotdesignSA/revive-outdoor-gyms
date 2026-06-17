@@ -73,15 +73,25 @@ export default function MapPage() {
 
         const icon = L.divIcon({
           className: '',
-          html: `<div style="
-            background:${colour};
-            width:14px;height:14px;
-            border-radius:50%;
-            border:3px solid white;
-            box-shadow:0 2px 6px rgba(0,0,0,0.35);
-          "></div>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
+          html: `<div style="position:relative;width:20px;height:20px;">
+            <div style="
+              position:absolute;inset:0;
+              border-radius:50%;
+              background:${colour};
+              opacity:0.3;
+              animation:gymPulse 2s ease-out infinite;
+            "></div>
+            <div style="
+              position:absolute;top:3px;left:3px;
+              width:14px;height:14px;
+              border-radius:50%;
+              background:${colour};
+              border:3px solid white;
+              box-shadow:0 2px 6px rgba(0,0,0,0.35);
+            "></div>
+          </div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
         })
 
         const marker = L.marker([gym.latitude, gym.longitude], { icon }).addTo(map)
@@ -117,6 +127,13 @@ export default function MapPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <style>{`
+        @keyframes gymPulse {
+          0% { transform: scale(1); opacity: 0.3; }
+          70% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+      `}</style>
 
       <div style={{
         background: 'white',
