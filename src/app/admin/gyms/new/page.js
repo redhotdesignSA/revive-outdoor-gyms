@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import imageCompression from 'browser-image-compression'
 
@@ -27,8 +27,9 @@ const USABILITY_OPTIONS = [
   { value: 'unusable', label: 'Unusable' },
 ]
 
-export default function AddGymPage() {
+function AddGymForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
@@ -38,14 +39,14 @@ export default function AddGymPage() {
   const [gpsLoading, setGpsLoading] = useState(false)
 
   const [gym, setGym] = useState({
-    name: '',
-    suburb: '',
-    municipality: '',
+    name: searchParams.get('name') || '',
+    suburb: searchParams.get('suburb') || '',
+    municipality: searchParams.get('municipality') || '',
     province: '',
     overall_status: 'unknown',
     public_notes: '',
-    latitude: null,
-    longitude: null,
+    latitude: searchParams.get('lat') ? parseFloat(searchParams.get('lat')) : null,
+    longitude: searchParams.get('lng') ? parseFloat(searchParams.get('lng')) : null,
   })
 
   const [machines, setMachines] = useState([
@@ -81,16 +82,24 @@ export default function AddGymPage() {
           shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
         })
 
+        // Use pre-filled lat/lng from suggestion if available, otherwise default to PE
         const center = gym.latitude ? [gym.latitude, gym.longitude] : [-33.9600, 25.6000]
-        const map = L.map(mapRef.current).setView(center, 13)
+        const zoom = gym.latitude ? 16 : 13
+        const map = L.map(mapRef.current).setView(center, zoom)
         mapInstanceRef.current = map
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors'
         }).addTo(map)
 
+        // Place marker if we already have coordinates from the suggestion
         if (gym.latitude) {
-          markerRef.current = L.marker([gym.latitude, gym.longitude]).addTo(map)
+          markerRef.current = L.marker([gym.latitude, gym.longitude], { draggable: true }).addTo(map)
+          markerRef.current.bindPopup('Drag to adjust').openPopup()
+          markerRef.current.on('dragend', (e) => {
+            const pos = e.target.getLatLng()
+            setGym(prev => ({ ...prev, latitude: pos.lat, longitude: pos.lng }))
+          })
         }
 
         map.on('click', (e) => {
@@ -100,7 +109,11 @@ export default function AddGymPage() {
           if (markerRef.current) {
             markerRef.current.setLatLng([lat, lng])
           } else {
-            markerRef.current = L.marker([lat, lng]).addTo(map)
+            markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map)
+            markerRef.current.on('dragend', (ev) => {
+              const pos = ev.target.getLatLng()
+              setGym(prev => ({ ...prev, latitude: pos.lat, longitude: pos.lng }))
+            })
           }
         })
       })
@@ -129,7 +142,11 @@ export default function AddGymPage() {
             if (markerRef.current) {
               markerRef.current.setLatLng([lat, lng])
             } else {
-              markerRef.current = L.marker([lat, lng]).addTo(mapInstanceRef.current)
+              markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(mapInstanceRef.current)
+              markerRef.current.on('dragend', (e) => {
+                const p = e.target.getLatLng()
+                setGym(prev => ({ ...prev, latitude: p.lat, longitude: p.lng }))
+              })
             }
           })
         }
@@ -182,16 +199,15 @@ export default function AddGymPage() {
     setSaving(true)
     const supabase = createClient()
 
-    // Insert gym
+    // Insert gym — only columns that exist in gym_sites schema
     const { data: gymData, error: gymError } = await supabase
       .from('gym_sites')
       .insert([{
         name: gym.name,
         suburb: gym.suburb,
         municipality: gym.municipality,
-        province: gym.province,
         overall_status: gym.overall_status,
-        public_notes: gym.public_notes,
+        public_notes: gym.public_notes || null,
         latitude: gym.latitude,
         longitude: gym.longitude,
       }])
@@ -348,6 +364,12 @@ export default function AddGymPage() {
           <>
             <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Set gym location</h2>
 
+            {gym.latitude && (
+              <div style={{ background: '#F0FDF4', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#2D6A4F' }}>
+                ✓ Location pre-filled from suggestion — drag the pin to adjust if needed
+              </div>
+            )}
+
             <button
               onClick={handleGPS}
               disabled={gpsLoading}
@@ -369,8 +391,8 @@ export default function AddGymPage() {
             <div ref={mapRef} style={{ height: '320px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid #E5E7EB' }} />
 
             {gym.latitude && (
-              <div style={{ background: '#F0FDF4', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#2D6A4F' }}>
-                ✓ Pin placed at {gym.latitude.toFixed(5)}, {gym.longitude.toFixed(5)}
+              <div style={{ background: '#F9FAFB', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#6B7280' }}>
+                📍 {gym.latitude.toFixed(5)}, {gym.longitude.toFixed(5)}
               </div>
             )}
 
@@ -555,5 +577,13 @@ export default function AddGymPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function AddGymPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>}>
+      <AddGymForm />
+    </Suspense>
   )
 }
