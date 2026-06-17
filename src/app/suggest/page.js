@@ -30,7 +30,7 @@ export default function SuggestGymPage() {
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
 
-  const canProceedStep1 = form.name.length >= 3 && form.suburb.length >= 2 && form.latitude && form.longitude
+  const canProceedStep1 = form.name.length >= 3 && form.suburb.length >= 2
   const canProceedStep2 = true // notes are optional
 
   // Init Leaflet map on step 2
