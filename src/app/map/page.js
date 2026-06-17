@@ -187,6 +187,24 @@ export default function MapPage() {
             </Link>
           ))
         )}
+
+        {/* Suggest a gym CTA */}
+        <Link href="/suggest" style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '13px 16px',
+          textDecoration: 'none',
+          color: '#2D6A4F',
+          borderTop: '1px solid #E5E7EB',
+          background: '#F0FDF4',
+        }}>
+          <span style={{ fontSize: '16px', marginRight: '10px' }}>📍</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '14px' }}>Know a gym not on the map?</div>
+            <div style={{ fontSize: '12px', color: '#6B7280' }}>Suggest a gym for us to add</div>
+          </div>
+          <span style={{ color: '#2D6A4F', fontSize: '18px' }}>›</span>
+        </Link>
       </div>
     </div>
   )

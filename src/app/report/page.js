@@ -1,14 +1,9 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-
-const MOCK_GYMS = [
-  { id: '1', name: 'Summerstrand Beachfront Gym', machines: ['Double Stepper', 'Air Walker', 'Chest Press', 'Waist Twister'] },
-  { id: '2', name: 'Greenacres Park Gym', machines: ['Leg Press', 'Pull Up Bars', 'Back Extension'] },
-  { id: '3', name: 'Walmer Township Gym', machines: ['Stepper', 'Shoulder Press', 'Sit Up Bench', 'Twister', 'Leg Raise'] },
-]
+import { createClient } from '@/lib/supabase/client'
 
 const ISSUE_TYPES = [
   { value: 'broken', label: 'Broken / not working' },
@@ -31,9 +26,17 @@ function ReportForm() {
 
   const [step, setStep] = useState(1)
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const [gyms, setGyms] = useState([])
+  const [machines, setMachines] = useState([])
+  const [gymsLoading, setGymsLoading] = useState(true)
+
   const [form, setForm] = useState({
     gym_id: preselectedGymId,
-    machine: '',
+    equipment_unit_id: '',
+    machine_label: '',
     issue_type: '',
     severity: '',
     notes: '',
@@ -41,12 +44,82 @@ function ReportForm() {
     reporter_email: '',
   })
 
-  const selectedGym = MOCK_GYMS.find(g => g.id === form.gym_id)
+  // Fetch all gyms on load
+  useEffect(() => {
+    const fetchGyms = async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('gym_sites')
+        .select('id, name, suburb')
+        .order('name')
+      if (!error) setGyms(data || [])
+      setGymsLoading(false)
+    }
+    fetchGyms()
+  }, [])
+
+  // Fetch machines when gym changes
+  useEffect(() => {
+    if (!form.gym_id) {
+      setMachines([])
+      return
+    }
+    const fetchMachines = async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('equipment_units')
+        .select('id, machine_label')
+        .eq('gym_site_id', form.gym_id)
+        .order('machine_label')
+      setMachines(data || [])
+    }
+    fetchMachines()
+  }, [form.gym_id])
+
+  const selectedGym = gyms.find(g => g.id === form.gym_id)
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
-  const canProceedStep1 = form.gym_id && form.machine && form.issue_type && form.severity
+
+  const handleGymChange = (gymId) => {
+    setForm(prev => ({ ...prev, gym_id: gymId, equipment_unit_id: '', machine_label: '' }))
+  }
+
+  const handleMachineChange = (unitId) => {
+    const machine = machines.find(m => m.id === unitId)
+    setForm(prev => ({
+      ...prev,
+      equipment_unit_id: unitId,
+      machine_label: machine?.machine_label || ''
+    }))
+  }
+
+  const canProceedStep1 = form.gym_id && form.equipment_unit_id && form.issue_type && form.severity
   const canProceedStep2 = form.notes.length >= 10
 
-  const handleSubmit = () => setSubmitted(true)
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('reports').insert({
+        gym_site_id: form.gym_id,
+        equipment_unit_id: form.equipment_unit_id || null,
+        machine_label: form.machine_label,
+        issue_type: form.issue_type,
+        severity: form.severity,
+        notes: form.notes,
+        reporter_name: form.reporter_name || null,
+        reporter_email: form.reporter_email || null,
+        moderation_status: 'pending',
+      })
+      if (error) throw error
+      setSubmitted(true)
+    } catch (err) {
+      console.error('Submit error:', err)
+      setSubmitError('Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   if (submitted) {
     return (
@@ -62,12 +135,15 @@ function ReportForm() {
             padding: '12px 24px', borderRadius: '25px',
             textDecoration: 'none', fontWeight: 700, fontSize: '15px'
           }}>Back to the map</Link>
-          <button onClick={() => { setSubmitted(false); setForm({ gym_id: '', machine: '', issue_type: '', severity: '', notes: '', reporter_name: '', reporter_email: '' }); setStep(1) }}
-            style={{
-              background: 'none', border: '2px solid #E5E7EB',
-              padding: '12px 24px', borderRadius: '25px',
-              cursor: 'pointer', fontWeight: 600, fontSize: '15px', color: '#374151'
-            }}>Report another issue</button>
+          <button onClick={() => {
+            setSubmitted(false)
+            setForm({ gym_id: '', equipment_unit_id: '', machine_label: '', issue_type: '', severity: '', notes: '', reporter_name: '', reporter_email: '' })
+            setStep(1)
+          }} style={{
+            background: 'none', border: '2px solid #E5E7EB',
+            padding: '12px 24px', borderRadius: '25px',
+            cursor: 'pointer', fontWeight: 600, fontSize: '15px', color: '#374151'
+          }}>Report another issue</button>
         </div>
       </div>
     )
@@ -101,21 +177,41 @@ function ReportForm() {
           <>
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Which gym?</label>
-              <select value={form.gym_id} onChange={e => { update('gym_id', e.target.value); update('machine', '') }}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px', background: 'white' }}>
-                <option value="">Select a gym...</option>
-                {MOCK_GYMS.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+              {gymsLoading ? (
+                <div style={{ padding: '10px 12px', color: '#9CA3AF', fontSize: '14px' }}>Loading gyms...</div>
+              ) : (
+                <select
+                  value={form.gym_id}
+                  onChange={e => handleGymChange(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px', background: 'white' }}
+                >
+                  <option value="">Select a gym...</option>
+                  {gyms.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}{g.suburb ? ` — ${g.suburb}` : ''}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {selectedGym && (
+            {form.gym_id && (
               <div>
                 <label style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Which machine?</label>
-                <select value={form.machine} onChange={e => update('machine', e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px', background: 'white' }}>
-                  <option value="">Select equipment...</option>
-                  {selectedGym.machines.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+                {machines.length === 0 ? (
+                  <div style={{ padding: '10px 12px', color: '#9CA3AF', fontSize: '14px', border: '1.5px solid #E5E7EB', borderRadius: '8px' }}>
+                    No machines recorded for this gym yet
+                  </div>
+                ) : (
+                  <select
+                    value={form.equipment_unit_id}
+                    onChange={e => handleMachineChange(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px', background: 'white' }}
+                  >
+                    <option value="">Select equipment...</option>
+                    {machines.map(m => (
+                      <option key={m.id} value={m.id}>{m.machine_label}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
 
@@ -128,8 +224,12 @@ function ReportForm() {
                     border: `1.5px solid ${form.issue_type === opt.value ? '#2D6A4F' : '#E5E7EB'}`,
                     background: form.issue_type === opt.value ? '#F0FDF4' : 'white', cursor: 'pointer'
                   }}>
-                    <input type="radio" name="issue_type" value={opt.value} checked={form.issue_type === opt.value}
-                      onChange={() => update('issue_type', opt.value)} style={{ accentColor: '#2D6A4F' }} />
+                    <input
+                      type="radio" name="issue_type" value={opt.value}
+                      checked={form.issue_type === opt.value}
+                      onChange={() => update('issue_type', opt.value)}
+                      style={{ accentColor: '#2D6A4F' }}
+                    />
                     <span style={{ fontSize: '14px' }}>{opt.label}</span>
                   </label>
                 ))}
@@ -152,30 +252,39 @@ function ReportForm() {
               </div>
             </div>
 
-            <button onClick={() => canProceedStep1 && setStep(2)} disabled={!canProceedStep1} style={{
-              width: '100%', padding: '14px', background: canProceedStep1 ? '#2D6A4F' : '#D1D5DB',
-              color: 'white', border: 'none', borderRadius: '25px', fontSize: '15px', fontWeight: 700,
-              cursor: canProceedStep1 ? 'pointer' : 'not-allowed'
-            }}>Next →</button>
+            <button
+              onClick={() => canProceedStep1 && setStep(2)}
+              disabled={!canProceedStep1}
+              style={{
+                width: '100%', padding: '14px',
+                background: canProceedStep1 ? '#2D6A4F' : '#D1D5DB',
+                color: 'white', border: 'none', borderRadius: '25px', fontSize: '15px', fontWeight: 700,
+                cursor: canProceedStep1 ? 'pointer' : 'not-allowed'
+              }}
+            >Next →</button>
           </>
         )}
 
         {step === 2 && (
           <>
             <div style={{ background: '#F0FDF4', borderRadius: '10px', padding: '12px 14px', fontSize: '13px', color: '#2D6A4F' }}>
-              <strong>{selectedGym?.name}</strong> · {form.machine} · {form.issue_type}
+              <strong>{selectedGym?.name}</strong> · {form.machine_label} · {form.issue_type}
             </div>
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>
                 Describe the problem <span style={{ color: '#9CA3AF', fontWeight: 400 }}>(required)</span>
               </label>
-              <textarea value={form.notes} onChange={e => update('notes', e.target.value)}
+              <textarea
+                value={form.notes}
+                onChange={e => update('notes', e.target.value)}
                 placeholder="Describe what you see — the more detail, the better. What is broken? Is it a safety risk?"
-                rows={5} style={{
+                rows={5}
+                style={{
                   width: '100%', padding: '10px 12px', borderRadius: '8px',
                   border: '1.5px solid #D1D5DB', fontSize: '14px', resize: 'vertical',
                   fontFamily: 'inherit', lineHeight: 1.5
-                }} />
+                }}
+              />
               <div style={{ fontSize: '12px', color: form.notes.length >= 10 ? '#2D6A4F' : '#9CA3AF', marginTop: '4px' }}>
                 {form.notes.length} characters {form.notes.length < 10 ? `(${10 - form.notes.length} more needed)` : '✓'}
               </div>
@@ -186,7 +295,8 @@ function ReportForm() {
                 borderRadius: '25px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', color: '#374151'
               }}>← Back</button>
               <button onClick={() => canProceedStep2 && setStep(3)} disabled={!canProceedStep2} style={{
-                flex: 2, padding: '14px', background: canProceedStep2 ? '#2D6A4F' : '#D1D5DB',
+                flex: 2, padding: '14px',
+                background: canProceedStep2 ? '#2D6A4F' : '#D1D5DB',
                 color: 'white', border: 'none', borderRadius: '25px', fontSize: '15px', fontWeight: 700,
                 cursor: canProceedStep2 ? 'pointer' : 'not-allowed'
               }}>Next →</button>
@@ -197,7 +307,7 @@ function ReportForm() {
         {step === 3 && (
           <>
             <div style={{ background: '#F0FDF4', borderRadius: '10px', padding: '12px 14px', fontSize: '13px', color: '#2D6A4F' }}>
-              <strong>{selectedGym?.name}</strong> · {form.machine}<br />
+              <strong>{selectedGym?.name}</strong> · {form.machine_label}<br />
               <span style={{ opacity: 0.8 }}>{form.notes.substring(0, 60)}{form.notes.length > 60 ? '...' : ''}</span>
             </div>
             <p style={{ fontSize: '14px', color: '#6B7280', lineHeight: 1.6 }}>
@@ -205,27 +315,46 @@ function ReportForm() {
             </p>
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Your name (optional)</label>
-              <input type="text" value={form.reporter_name} onChange={e => update('reporter_name', e.target.value)}
-                placeholder="e.g. Norman" style={{
-                  width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px'
-                }} />
+              <input
+                type="text" value={form.reporter_name}
+                onChange={e => update('reporter_name', e.target.value)}
+                placeholder="e.g. Norman"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px' }}
+              />
             </div>
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Email address (optional)</label>
-              <input type="email" value={form.reporter_email} onChange={e => update('reporter_email', e.target.value)}
-                placeholder="you@example.com" style={{
-                  width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px'
-                }} />
+              <input
+                type="email" value={form.reporter_email}
+                onChange={e => update('reporter_email', e.target.value)}
+                placeholder="you@example.com"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #D1D5DB', fontSize: '15px' }}
+              />
             </div>
+
+            {submitError && (
+              <div style={{ background: '#FEE2E2', color: '#991B1B', padding: '10px 14px', borderRadius: '8px', fontSize: '14px' }}>
+                {submitError}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setStep(2)} style={{
                 flex: 1, padding: '14px', background: 'white', border: '2px solid #E5E7EB',
                 borderRadius: '25px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', color: '#374151'
               }}>← Back</button>
-              <button onClick={handleSubmit} style={{
-                flex: 2, padding: '14px', background: '#E76F51', color: 'white', border: 'none',
-                borderRadius: '25px', fontSize: '15px', fontWeight: 700, cursor: 'pointer'
-              }}>Submit report ✓</button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                style={{
+                  flex: 2, padding: '14px',
+                  background: submitting ? '#9CA3AF' : '#E76F51',
+                  color: 'white', border: 'none', borderRadius: '25px', fontSize: '15px', fontWeight: 700,
+                  cursor: submitting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {submitting ? 'Submitting...' : 'Submit report ✓'}
+              </button>
             </div>
           </>
         )}
