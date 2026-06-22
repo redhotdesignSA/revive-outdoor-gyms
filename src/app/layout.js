@@ -55,7 +55,7 @@ export default function RootLayout({ children }) {
             textDecoration: 'none',
             fontSize: '13px',
             fontWeight: 600
-          }}>Report broken equipment</a>
+          }}>Report something</a>
         </header>
         <main style={{ minHeight: 'calc(100vh - 60px)' }}>
           {children}

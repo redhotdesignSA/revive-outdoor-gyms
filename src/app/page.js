@@ -1,7 +1,21 @@
 import Link from 'next/link'
-import Image from 'next/image'
+import { createClient } from '@/lib/supabase/server'
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient()
+
+  const [{ count: gymCount }, { count: machineCount }, { count: reportCount }] = await Promise.all([
+    supabase.from('gym_sites').select('*', { count: 'exact', head: true }),
+    supabase.from('equipment_units').select('*', { count: 'exact', head: true }),
+    supabase.from('reports').select('*', { count: 'exact', head: true }),
+  ])
+
+  const stats = [
+    { num: gymCount ?? 0, label: 'Gyms mapped' },
+    { num: machineCount ?? 0, label: 'Machines tracked' },
+    { num: reportCount ?? 0, label: 'Reports submitted' },
+  ]
+
   return (
     <div>
       {/* Hero */}
@@ -59,17 +73,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Stats bar */}
+      {/* Stats bar — live data from Supabase */}
       <div style={{
         display: 'flex',
         background: 'white',
         borderBottom: '1px solid #E5E7EB'
       }}>
-        {[
-          { num: '0', label: 'Gyms mapped' },
-          { num: '0', label: 'Reports submitted' },
-          { num: '0', label: 'Issues fixed' },
-        ].map((stat, i) => (
+        {stats.map((stat, i) => (
           <div key={i} style={{
             flex: 1,
             padding: '20px 8px',
